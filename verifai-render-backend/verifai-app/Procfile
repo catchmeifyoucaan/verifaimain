@@ -1,0 +1,12 @@
+# This Procfile is for demonstration purposes to show how multiple services *could* be run.
+# For a production Render deployment, each microservice (main.py, pharmaceutical_agent.py, etc.)
+# should typically be configured as its own separate Render service.
+
+# Main API Gateway
+web: uvicorn main:app --host 0.0.0.0 --port 8000
+
+# Specialized Agents (each would be its own Render service in production)
+pharmaceutical-agent: uvicorn agents.pharmaceutical_agent:app --host 0.0.0.0 --port 8001
+drink-agent: uvicorn agents.drink_agent:app --host 0.0.0.0 --port 8002
+food-agent: uvicorn agents.food_agent:app --host 0.0.0.0 --port 8003
+water-agent: uvicorn agents.water_agent:app --host 0.0.0.0 --port 8004
