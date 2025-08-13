@@ -1,11 +1,11 @@
-import React, { useState, useEffect, createContext, useContext, useCallback, useRef } from 'react';
+import React, { useState, useEffect, createContext, useContext, useCallback } from 'react';
+import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import mylogo from './mylogo.png';
-import { Camera, Globe, ServerCrash, LogIn, User, LogOut, Upload, History } from 'lucide-react';
+import { Camera, Globe, ServerCrash, LogIn, User, LogOut, Upload, History, Shield, Zap, Target, CheckCircle } from 'lucide-react';
 import CameraScreen from './components/CameraScreen';
 import UploadScreen from './components/UploadScreen';
 import VerificationHistory from './components/VerificationHistory';
 import OnboardingGuide from './components/OnboardingGuide';
-import { CSSTransition, TransitionGroup } from 'react-transition-group';
 import PropTypes from 'prop-types';
 import ErrorBoundary from './components/ErrorBoundary';
 import ProfileScreen from './components/ProfileScreen';
@@ -16,8 +16,6 @@ import * as cocoSsd from '@tensorflow-models/coco-ssd';
 import { initializeApp } from "firebase/app";
 import { getFirestore, collection, addDoc, serverTimestamp } from "firebase/firestore";
 import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut } from "firebase/auth";
-
-
 
 // --- FINAL FIREBASE CONFIGURATION (Your keys are now integrated) ---
 const firebaseConfig = {
@@ -99,24 +97,27 @@ export const AuthProvider = ({ children }) => {
             setLoading(false);
             return;
         }
+
         const unsubscribe = onAuthStateChanged(auth, (user) => {
             setUser(user);
             setLoading(false);
         });
-        return unsubscribe;
+
+        return () => unsubscribe();
     }, [auth, firebaseLoading, firebaseError]);
 
     const signInWithGoogle = async () => {
+        if (!auth) return;
         const provider = new GoogleAuthProvider();
         try {
             await signInWithPopup(auth, provider);
         } catch (error) {
-            console.error("Google Sign-In error:", error);
-            // Handle specific errors, e.g., popup closed by user
+            console.error("Google sign-in error:", error);
         }
     };
 
     const signOutUser = async () => {
+        if (!auth) return;
         try {
             await signOut(auth);
         } catch (error) {
@@ -124,11 +125,16 @@ export const AuthProvider = ({ children }) => {
         }
     };
 
-    const value = { user, loading, signInWithGoogle, signOutUser };
+    const value = {
+        user,
+        loading,
+        signInWithGoogle,
+        signOutUser,
+    };
 
     return (
         <AuthContext.Provider value={value}>
-            {!loading && children}
+            {children}
         </AuthContext.Provider>
     );
 };
@@ -138,75 +144,29 @@ AuthProvider.propTypes = {
 };
 
 export const useAuth = () => {
-    return useContext(AuthContext);
+    const context = useContext(AuthContext);
+    if (!context) {
+        throw new Error('useAuth must be used within an AuthProvider');
+    }
+    return context;
 };
 
-
 // ==============================================================================
-// 2. Login Screen
+// 3. Main App Component
 // ==============================================================================
-const LoginScreen = () => {
-    const { signInWithGoogle } = useAuth();
-
-    return (
-        <div className="relative flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-gray-900 to-black text-white overflow-hidden p-4">
-            {/* Abstract Background Elements */}
-            <div className="absolute top-0 left-0 w-full h-full z-0 opacity-20">
-                <div className="absolute w-96 h-96 bg-purple-500 rounded-full -top-20 -left-20 mix-blend-screen filter blur-3xl animate-blob-1"></div>
-                <div className="absolute w-96 h-96 bg-blue-500 rounded-full -bottom-20 -right-20 mix-blend-screen filter blur-3xl animate-blob-2"></div>
-                <div className="absolute w-80 h-80 bg-green-500 rounded-full top-1/4 left-1/4 mix-blend-screen filter blur-3xl animate-blob-3"></div>
-            </div>
-
-            {/* Main Content Card */}
-            <div className="relative z-10 bg-gray-800/50 backdrop-blur-lg border border-gray-700 rounded-xl shadow-2xl p-8 md:p-12 text-center max-w-md w-full transform transition-all duration-500 ease-out hover:scale-105 hover:shadow-purple-500/30">
-                <div className="relative w-24 h-24 mx-auto mb-6">
-                    <Globe className="w-24 h-24 text-purple-400 animate-pulse-slow" />
-                    <div className="absolute inset-0 flex items-center justify-center">
-                        <LogIn className="w-12 h-12 text-purple-300" />
-                    </div>
-                </div>
-                <h1 className="text-5xl font-extrabold mb-4 tracking-tight">
-                    Welcome to Verif<span className="text-purple-400">Ai</span>
-                </h1>
-                <p className="text-lg text-gray-300 mb-8 leading-relaxed">
-                    Your trusted partner for AI-powered authenticity verification.
-                </p>
-                <button
-                    onClick={signInWithGoogle}
-                    className="flex items-center justify-center gap-3 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-bold py-3 px-6 rounded-full transition-all duration-300 shadow-lg transform hover:-translate-y-1 hover:scale-105 focus:outline-none focus:ring-4 focus:ring-blue-500 focus:ring-opacity-50 w-full"
-                >
-                    <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="w-6 h-6" />
-                    Sign in with Google
-                </button>
-            </div>
-
-            
-        </div>
-    );
-};
-
-
-
-
-    
-
-
-
-// ==============================================================================
-// 5. App Entrypoint with Authentication & Error Handling
-// ==============================================================================
-
-export default function App() {
+const App = () => {
     return (
         <ErrorBoundary>
             <FirebaseProvider>
                 <AuthProvider>
-                    <AppContainer />
+                    <Router>
+                        <AppContainer />
+                    </Router>
                 </AuthProvider>
             </FirebaseProvider>
         </ErrorBoundary>
     );
-}
+};
 
 const AppContainer = () => {
     const { user } = useAuth();
@@ -214,35 +174,120 @@ const AppContainer = () => {
 
     if (firebaseLoading) {
         return (
-            <div className="w-full min-h-screen bg-gray-900 text-white flex flex-col items-center justify-center p-4 text-center">
-                <Globe className="w-16 h-16 text-purple-400 animate-spin mb-4" />
-                <h1 className="text-2xl font-bold mb-2">Loading Firebase...</h1>
-                <p className="max-w-md text-gray-300">Please wait while we connect to our services.</p>
+            <div className="w-full min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 text-white flex flex-col items-center justify-center p-4 text-center">
+                <div className="relative">
+                    <Globe className="w-20 h-20 text-purple-400 animate-spin mb-6" />
+                    <div className="absolute inset-0 bg-purple-400/20 rounded-full blur-xl"></div>
+                </div>
+                <h1 className="text-3xl font-bold mb-4 bg-gradient-to-r from-purple-400 to-blue-400 bg-clip-text text-transparent">
+                    Initializing VerifAi
+                </h1>
+                <p className="max-w-md text-gray-300 text-lg">Connecting to our secure AI verification services...</p>
+                <div className="mt-6 flex space-x-2">
+                    <div className="w-2 h-2 bg-purple-400 rounded-full animate-bounce"></div>
+                    <div className="w-2 h-2 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+                    <div className="w-2 h-2 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                </div>
             </div>
         );
     }
 
     if (firebaseError) {
         return (
-            <div className="w-full min-h-screen bg-red-900/80 text-white flex flex-col items-center justify-center p-4 text-center">
-                <ServerCrash className="w-16 h-16 text-red-400 mb-4" />
-                <h1 className="text-2xl font-bold mb-2">Initialization Error</h1>
-                <p className="max-w-md text-red-300">{firebaseError}</p>
+            <div className="w-full min-h-screen bg-gradient-to-br from-red-900 via-red-800 to-red-900 text-white flex flex-col items-center justify-center p-4 text-center">
+                <ServerCrash className="w-20 h-20 text-red-400 mb-6" />
+                <h1 className="text-3xl font-bold mb-4">Initialization Error</h1>
+                <p className="max-w-md text-red-300 text-lg mb-6">{firebaseError}</p>
+                <button 
+                    onClick={() => window.location.reload()} 
+                    className="bg-red-600 hover:bg-red-700 px-6 py-3 rounded-lg font-semibold transition-colors"
+                >
+                    Retry
+                </button>
             </div>
         );
     }
     
     return user ? <VerifAiApp /> : <LoginScreen />;
-}
+};
 
-    const VerifAiApp = () => {
+// ==============================================================================
+// 4. Login Screen
+// ==============================================================================
+const LoginScreen = () => {
+    const { signInWithGoogle } = useAuth();
+
+    return (
+        <div className="w-full min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-blue-900 flex flex-col items-center justify-center p-4">
+            <div className="w-full max-w-md">
+                {/* Logo and Brand */}
+                <div className="text-center mb-12">
+                    <div className="relative inline-block mb-6">
+                        <img src={mylogo} alt="VerifAi Logo" className="w-20 h-20 mx-auto" />
+                        <div className="absolute inset-0 bg-purple-400/20 rounded-full blur-xl"></div>
+                    </div>
+                    <h1 className="text-5xl font-bold mb-4 bg-gradient-to-r from-purple-400 via-blue-400 to-cyan-400 bg-clip-text text-transparent">
+                        VerifAi
+                    </h1>
+                    <p className="text-xl text-gray-300 mb-2">AI-Powered Authenticity Verification</p>
+                    <p className="text-gray-400">Powered by SurpriseAI</p>
+                </div>
+
+                {/* Features */}
+                <div className="grid grid-cols-1 gap-4 mb-8">
+                    <div className="flex items-center space-x-3 text-gray-300">
+                        <Shield className="w-5 h-5 text-green-400" />
+                        <span>Instant AI Verification</span>
+                    </div>
+                    <div className="flex items-center space-x-3 text-gray-300">
+                        <Zap className="w-5 h-5 text-yellow-400" />
+                        <span>Real-time Camera Detection</span>
+                    </div>
+                    <div className="flex items-center space-x-3 text-gray-300">
+                        <Target className="w-5 h-5 text-blue-400" />
+                        <span>Multi-format Support</span>
+                    </div>
+                    <div className="flex items-center space-x-3 text-gray-300">
+                        <CheckCircle className="w-5 h-5 text-purple-400" />
+                        <span>Professional Grade Security</span>
+                    </div>
+                </div>
+
+                {/* Login Button */}
+                <button
+                    onClick={signInWithGoogle}
+                    className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white font-bold py-4 px-6 rounded-xl transition-all duration-300 shadow-lg transform hover:scale-105 hover:shadow-2xl"
+                >
+                    <div className="flex items-center justify-center space-x-3">
+                        <LogIn className="w-6 h-6" />
+                        <span>Continue with Google</span>
+                    </div>
+                </button>
+
+                {/* Footer */}
+                <div className="text-center mt-8 text-gray-400 text-sm">
+                    <p>By continuing, you agree to our Terms of Service and Privacy Policy</p>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// ==============================================================================
+// 5. Main App with Routing
+// ==============================================================================
+const VerifAiApp = () => {
     const { signOutUser, user } = useAuth();
     const { db } = useFirebase();
-    const [activeScreen, setActiveScreen] = useState('camera'); // 'camera', 'upload', 'profile'
     const [detectedObjects, setDetectedObjects] = useState([]);
-    const [model, setModel] = useState(null); // Model will be loaded here
+    const [model, setModel] = useState(null);
     const [modelLoading, setModelLoading] = useState(true);
     const [showOnboarding, setShowOnboarding] = useState(false);
+    const [verificationResult, setVerificationResult] = useState(null);
+    const [cameraVerificationResult, setCameraVerificationResult] = useState(null);
+    const [isVerifying, setIsVerifying] = useState(false);
+    const [selectedObject, setSelectedObject] = useState(null);
+    const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
     useEffect(() => {
         const hasCompletedOnboarding = localStorage.getItem('hasCompletedOnboarding');
@@ -266,28 +311,6 @@ const AppContainer = () => {
         };
         loadModel();
     }, []);
-    const [selectedImageForUpload, setSelectedImageForUpload] = useState(null);
-    const [selectedObjectClassForUpload, setSelectedObjectClassForUpload] = useState('');
-    const [verificationResult, setVerificationResult] = useState(null);
-    const [cameraVerificationResult, setCameraVerificationResult] = useState(null);
-    const [selectedAgentForUpload, setSelectedAgentForUpload] = useState(null);
-
-    const [isVerifying, setIsVerifying] = useState(false);
-    const screenRef = useRef(null);
-
-    const handleNavigate = (screen, params = {}) => {
-        setActiveScreen(screen);
-        // Reset state when navigating to a new screen for a clean slate
-        setVerificationResult(null);
-        setSelectedObject(null);
-        setDetectedObjects([]);
-
-        if (screen === 'upload' && params.agentId) {
-            setSelectedAgentForUpload(params.agentId);
-            setSelectedImageForUpload(null);
-            setSelectedObjectClassForUpload('');
-        }
-    };
 
     const triggerHapticFeedback = useCallback((duration) => {
         if (navigator.vibrate) {
@@ -297,15 +320,13 @@ const AppContainer = () => {
         }
     }, []);
 
-    const [selectedObject, setSelectedObject] = useState(null);
-
     const handleSelectObject = (obj) => {
         console.log("handleSelectObject called with object:", obj);
         setSelectedObject(obj);
     };
 
     const handleVerify = async (fileOrDataUrl, agentId, objectClass) => {
-        setVerificationResult(null); // Clear previous results
+        setVerificationResult(null);
         
         const payload = {
             object_class: objectClass,
@@ -315,19 +336,16 @@ const AppContainer = () => {
         const sendError = (title, summary) => {
             console.error(title, summary);
             setVerificationResult({ status: "danger", title, summary });
-            setActiveScreen('upload'); // Navigate to show the error
         };
 
-        // Case 1: Input is a base64 data URL string (from camera)
         if (typeof fileOrDataUrl === 'string' && fileOrDataUrl.startsWith('data:image/')) {
             console.log("Handling verification for captured image data URL.");
             payload.image_data_url = fileOrDataUrl;
             payload.file_type = fileOrDataUrl.substring(5, fileOrDataUrl.indexOf(';')) || 'image/jpeg';
-            await sendVerificationRequest(payload, 'camera'); // Pass 'camera' as source
+            await sendVerificationRequest(payload, 'camera');
             return;
         }
 
-        // Case 2: Input is a File object (from upload)
         if (fileOrDataUrl instanceof File) {
             console.log("Handling verification for uploaded file.");
             const file = fileOrDataUrl;
@@ -345,30 +363,23 @@ const AppContainer = () => {
                 } else {
                     payload.media_data_url = result;
                 }
-                sendVerificationRequest(payload, 'upload'); // Pass 'upload' as source
+                sendVerificationRequest(payload, 'upload');
             };
 
-            if (fileType.startsWith('text/')) {
-                reader.readAsText(file);
-            } else if (fileType.startsWith('image/') || fileType.startsWith('video/') || fileType.startsWith('audio/') || fileType === 'application/pdf' || fileType.includes('spreadsheet') || fileType.includes('excel') || fileType === 'text/csv') {
+            if (fileType.startsWith('image/')) {
                 reader.readAsDataURL(file);
+            } else if (fileType.startsWith('text/')) {
+                reader.readAsText(file);
             } else {
-                sendError("Unsupported File Type", `The file type '${fileType}' is not supported.`);
-                return;
+                reader.readAsDataURL(file);
             }
-            reader.onload = () => onReaderLoad(reader.result);
-            return;
         }
-        
-        // Fallback for unexpected input
-        sendError("Invalid Input", "An unexpected error occurred with the input data.");
     };
 
     const sendVerificationRequest = async (payload, source) => {
-        console.log(`Sending verification request from ${source} with payload:`, payload);
         setIsVerifying(true);
         try {
-            const response = await fetch('https://verifai-azuc.onrender.com/verify', {
+            const response = await fetch('https://verifai-backend.onrender.com/verify', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -377,8 +388,7 @@ const AppContainer = () => {
             });
 
             if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.detail || 'Verification failed');
+                throw new Error(`HTTP error! status: ${response.status}`);
             }
 
             const result = await response.json();
@@ -387,15 +397,20 @@ const AppContainer = () => {
                 setCameraVerificationResult(result);
             } else {
                 setVerificationResult(result);
-                setActiveScreen('upload');
             }
 
-            // Save to history
-            if (db && user) {
+            if (db && result.verification_id) {
                 try {
-                    await addDoc(collection(db, "users", user.uid, "personal_verifications"), {
-                        ...result,
+                    await addDoc(collection(db, 'verification_history'), {
+                        verification_id: result.verification_id,
+                        user_id: user.uid,
                         timestamp: serverTimestamp(),
+                        object_class: payload.object_class,
+                        agent_id: payload.agent_id,
+                        status: result.status,
+                        title: result.title,
+                        summary: result.summary,
+                        confidence: result.confidence,
                     });
                     console.log("Verification result saved to history.");
                 } catch (historyError) {
@@ -411,74 +426,9 @@ const AppContainer = () => {
                 setCameraVerificationResult(errorResult);
             } else {
                 setVerificationResult(errorResult);
-                setActiveScreen('upload');
             }
         } finally {
             setIsVerifying(false);
-        }
-    };
-
-    const renderScreen = () => {
-        switch (activeScreen) {
-            case 'camera':
-                return (
-                    <CameraScreen
-                        db={db}
-                        model={model}
-                        modelLoading={modelLoading}
-                        detectedObjects={detectedObjects}
-                        setDetectedObjects={setDetectedObjects}
-                        handleSelectObject={handleSelectObject}
-                        triggerHapticFeedback={triggerHapticFeedback}
-                        selectedObject={selectedObject}
-                        onVerify={(fileOrDataUrl, agentId, objectClass) => handleVerify(fileOrDataUrl, agentId, objectClass)}
-                        isVerifying={isVerifying}
-                        cameraVerificationResult={cameraVerificationResult}
-                        clearCameraVerification={() => {
-                            setCameraVerificationResult(null);
-                            setDetectedObjects([]);
-                            handleSelectObject(null);
-                        }}
-                    />
-                );
-            case 'upload':
-                return (
-                    <UploadScreen
-                        db={db}
-                        initialFile={selectedImageForUpload}
-                        initialObjectClass={selectedObjectClassForUpload}
-                        onVerify={(fileOrDataUrl, agentId, objectClass) => handleVerify(fileOrDataUrl, agentId, objectClass)}
-                        verificationResult={verificationResult}
-                        initialAgentId={selectedAgentForUpload}
-                        isVerifying={isVerifying}
-                        onNavigate={handleNavigate}
-                    />
-                );
-            case 'profile':
-                return <ProfileScreen />;
-            case 'history':
-                return <VerificationHistory />;
-            default:
-                return (
-                    <CameraScreen
-                        db={db}
-                        model={model}
-                        modelLoading={modelLoading}
-                        detectedObjects={detectedObjects}
-                        setDetectedObjects={setDetectedObjects}
-                        handleSelectObject={handleSelectObject}
-                        triggerHapticFeedback={triggerHapticFeedback}
-                        selectedObject={selectedObject}
-                        onVerify={(fileOrDataUrl, agentId, objectClass) => handleVerify(fileOrDataUrl, agentId, objectClass)}
-                        isVerifying={isVerifying}
-                        cameraVerificationResult={cameraVerificationResult}
-                        clearCameraVerification={() => {
-                            setCameraVerificationResult(null);
-                            setDetectedObjects([]);
-                            handleSelectObject(null);
-                        }}
-                    />
-                );
         }
     };
 
@@ -487,37 +437,170 @@ const AppContainer = () => {
         setShowOnboarding(false);
     };
 
+    const toggleMobileMenu = () => {
+        setIsMobileMenuOpen(!isMobileMenuOpen);
+    };
+
+    const closeMobileMenu = () => {
+        setIsMobileMenuOpen(false);
+    };
+
     return (
-        <div className="flex flex-col w-full min-h-screen bg-gray-900 text-white">
+        <div className="flex flex-col w-full min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 text-white">
             {showOnboarding && <OnboardingGuide onComplete={handleOnboardingComplete} />}
-            <header className="flex justify-between items-center p-4 bg-gray-800 shadow-lg border-b border-gray-700">
-                <div className="flex items-center">
-                    <img src={mylogo} alt="VerifAI Logo" className="h-8 w-8 mr-2" />
-                    <h1 className="text-2xl font-bold text-purple-400">VerifAi</h1>
+            
+            {/* Professional Header */}
+            <header className="bg-gray-800/80 backdrop-blur-xl border-b border-gray-700/50 shadow-2xl sticky top-0 z-40">
+                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                    <div className="flex justify-between items-center py-4">
+                        {/* Logo and Brand */}
+                        <div className="flex items-center space-x-4">
+                            <div className="relative">
+                                <img src={mylogo} alt="VerifAi Logo" className="h-10 w-10" />
+                                <div className="absolute inset-0 bg-purple-400/20 rounded-full blur-sm"></div>
+                            </div>
+                            <div>
+                                <h1 className="text-2xl font-bold bg-gradient-to-r from-purple-400 to-blue-400 bg-clip-text text-transparent">
+                                    VerifAi
+                                </h1>
+                                <p className="text-xs text-gray-400">AI Verification Platform</p>
+                            </div>
+                        </div>
+
+                        {/* Desktop Navigation */}
+                        <nav className="hidden md:flex items-center space-x-1">
+                            <Link to="/" className="nav-link">
+                                <Camera className="w-5 h-5" />
+                                <span>Camera</span>
+                            </Link>
+                            <Link to="/upload" className="nav-link">
+                                <Upload className="w-5 h-5" />
+                                <span>Upload</span>
+                            </Link>
+                            <Link to="/history" className="nav-link">
+                                <History className="w-5 h-5" />
+                                <span>History</span>
+                            </Link>
+                            <Link to="/profile" className="nav-link">
+                                <User className="w-5 h-5" />
+                                <span>Profile</span>
+                            </Link>
+                        </nav>
+
+                        {/* User Menu */}
+                        <div className="flex items-center space-x-3">
+                            <div className="hidden sm:flex items-center space-x-2 text-sm text-gray-300">
+                                <span>Welcome,</span>
+                                <span className="font-semibold text-purple-400">{user?.displayName || 'User'}</span>
+                            </div>
+                            
+                            {/* Mobile Menu Button */}
+                            <button
+                                onClick={toggleMobileMenu}
+                                className="md:hidden p-2 rounded-lg text-gray-400 hover:text-white hover:bg-gray-700/50 transition-all duration-200"
+                                title="Menu"
+                            >
+                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                                </svg>
+                            </button>
+                            
+                            <button 
+                                onClick={signOutUser} 
+                                className="p-2 rounded-lg text-gray-400 hover:text-red-400 hover:bg-red-900/20 transition-all duration-200"
+                                title="Sign Out"
+                            >
+                                <LogOut className="w-5 h-5" />
+                            </button>
+                        </div>
+                    </div>
                 </div>
-                <nav className="flex items-center space-x-2 sm:space-x-4">
-                    <button onClick={() => setActiveScreen('camera')} className={`p-2 sm:p-3 rounded-full transition-all duration-300 ease-in-out flex items-center justify-center ${activeScreen === 'camera' ? 'bg-purple-600 text-white shadow-lg' : 'text-gray-400 hover:bg-gray-700 hover:text-white'}`}><Camera className="w-6 h-6" /></button>
-                    <button onClick={() => setActiveScreen('upload')} className={`p-2 sm:p-3 rounded-full transition-all duration-300 ease-in-out flex items-center justify-center ${activeScreen === 'upload' ? 'bg-purple-600 text-white shadow-lg' : 'text-gray-400 hover:bg-gray-700 hover:text-white'}`}><Upload className="w-6 h-6" /></button>
-                    <button onClick={() => setActiveScreen('profile')} className={`p-2 sm:p-3 rounded-full transition-all duration-300 ease-in-out flex items-center justify-center ${activeScreen === 'profile' ? 'bg-purple-600 text-white shadow-lg' : 'text-gray-400 hover:bg-gray-700 hover:text-white'}`}><User className="w-6 h-6" /></button>
-                    <button onClick={() => setActiveScreen('history')} className={`p-2 sm:p-3 rounded-full transition-all duration-300 ease-in-out flex items-center justify-center ${activeScreen === 'history' ? 'bg-purple-600 text-white shadow-lg' : 'text-gray-400 hover:bg-gray-700 hover:text-white'}`}><History className="w-6 h-6" /></button>
-                    <button onClick={signOutUser} className="p-2 sm:p-3 rounded-full transition-all duration-300 ease-in-out flex items-center justify-center text-red-400 hover:bg-red-700 hover:text-white"><LogOut className="w-6 h-6" /></button>
-                </nav>
+
+                {/* Mobile Navigation Menu */}
+                <div className={`md:hidden transition-all duration-300 ease-in-out ${
+                    isMobileMenuOpen ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'
+                } overflow-hidden`}>
+                    <div className="px-4 pb-4 space-y-2">
+                        <Link 
+                            to="/" 
+                            className="nav-link w-full justify-start"
+                            onClick={closeMobileMenu}
+                        >
+                            <Camera className="w-5 h-5" />
+                            <span>Camera Verification</span>
+                        </Link>
+                        <Link 
+                            to="/upload" 
+                            className="nav-link w-full justify-start"
+                            onClick={closeMobileMenu}
+                        >
+                            <Upload className="w-5 h-5" />
+                            <span>File Upload</span>
+                        </Link>
+                        <Link 
+                            to="/history" 
+                            className="nav-link w-full justify-start"
+                            onClick={closeMobileMenu}
+                        >
+                            <History className="w-5 h-5" />
+                            <span>Verification History</span>
+                        </Link>
+                        <Link 
+                            to="/profile" 
+                            className="nav-link w-full justify-start"
+                            onClick={closeMobileMenu}
+                        >
+                            <User className="w-5 h-5" />
+                            <span>User Profile</span>
+                        </Link>
+                    </div>
+                </div>
             </header>
-            <main className="flex-grow flex flex-col items-center justify-center p-4">
-                <TransitionGroup component={null}>
-                    <CSSTransition
-                        key={activeScreen}
-                        timeout={300}
-                        classNames="fade"
-                        nodeRef={screenRef}
-                    >
-                        {renderScreen()}
-                    </CSSTransition>
-                </TransitionGroup>
+
+            {/* Main Content */}
+            <main className="flex-grow">
+                <Routes>
+                    <Route path="/" element={
+                        <CameraScreen
+                            db={db}
+                            model={model}
+                            modelLoading={modelLoading}
+                            detectedObjects={detectedObjects}
+                            setDetectedObjects={setDetectedObjects}
+                            handleSelectObject={handleSelectObject}
+                            triggerHapticFeedback={triggerHapticFeedback}
+                            selectedObject={selectedObject}
+                            onVerify={(fileOrDataUrl, agentId, objectClass) => handleVerify(fileOrDataUrl, agentId, objectClass)}
+                            isVerifying={isVerifying}
+                            cameraVerificationResult={cameraVerificationResult}
+                            clearCameraVerification={() => {
+                                setCameraVerificationResult(null);
+                                setDetectedObjects([]);
+                                handleSelectObject(null);
+                            }}
+                        />
+                    } />
+                    <Route path="/upload" element={
+                        <UploadScreen
+                            db={db}
+                            initialFile={null}
+                            initialObjectClass=""
+                            onVerify={(fileOrDataUrl, agentId, objectClass) => handleVerify(fileOrDataUrl, agentId, objectClass)}
+                            verificationResult={verificationResult}
+                            initialAgentId={null}
+                            isVerifying={isVerifying}
+                            onNavigate={() => {}}
+                        />
+                    } />
+                    <Route path="/profile" element={<ProfileScreen />} />
+                    <Route path="/history" element={<VerificationHistory />} />
+                </Routes>
             </main>
         </div>
     );
 };
+
+export default App;
 
 
 
